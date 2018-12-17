@@ -1,0 +1,46 @@
+---
+
+- hosts: loadbalancer
+  become: true
+  gather_facts: no
+  pre_tasks:
+    - name: 'install python2'
+      raw: sudo apt-get -y install python
+  tasks:
+    - name: install nginx
+      apt: name=nginx state=present update_cache=yes
+    - name: start nginx
+      service: name=nginx state=started enabled=yes
+    - name: configure nginx
+      template: src=loadbalancer.conf.j2 dest=/etc/nginx/sites-available/test mode=0644
+      notify: restart nginx
+    - name: delete old link
+      file: path=/etc/nginx/sites-enabled/default state=absent
+      notify: restart nginx
+    - name: activate test site
+      file: src=/etc/nginx/sites-available/test dest=/etc/nginx/sites-enabled/test state=link
+      notify: restart nginx
+  handlers:
+    - name: restart nginx
+      service: name=nginx state=restarted
+
+- hosts: webserver
+  become: true
+  gather_facts: no
+  pre_tasks:
+    - name: 'install python2'
+      raw: sudo apt-get -y install python
+  tasks:
+    - name: install apache
+      apt: name=apache2 state=present update_cache=yes
+    - name: deleted index.html
+      file: path=/var/www/html/index.html state=absent
+      notify: restart apache2
+    - name: set up index.html for {{ serverName }}
+      copy: content="<html>
+            header><title>Welcome to {{ serverName }}</title></header>
+            <body>Hello from {{ serverName }}!</body></html>"
+            dest=/var/www/html/index.html mode=0644
+  handlers:
+    - name: restart apache2
+      service: name=apache2 state=restarted
